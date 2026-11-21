@@ -29,7 +29,7 @@ only the V2 drives, and firmware would not replace the host unlocker.
 
 ## Install
 
-Download the latest release, or build from source:
+[Download the latest release](https://github.com/toolio-oss/sandisk-opener/releases/latest), or build from source:
 
 ```sh
 ./build.sh
