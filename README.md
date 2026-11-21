@@ -92,4 +92,5 @@ MIT. See [LICENSE](LICENSE).
 ## Disclaimer
 
 Unofficial. Not affiliated with SanDisk or Western Digital. SanDisk and Extreme
+are trademarks of their respective owners. Apple, Apple Silicon, macOS and ARM
 are trademarks of their respective owners. Use at your own risk.
