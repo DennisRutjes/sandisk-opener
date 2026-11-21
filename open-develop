@@ -1,0 +1,91 @@
+#!/bin/zsh
+# One action: make the SanDisk volume "develop" available and open it in Finder.
+#
+#   1. hardware-unlock the SanDisk if it is locked (asks for the SanDisk password)
+#   2. find the APFS volume by NAME, never by a fixed disk number
+#   3. unlock the APFS/FileVault volume if it is locked (asks for its passphrase)
+#   4. mount it and open it in Finder
+#
+# There is no erase, format, password-change or firmware path in this script.
+
+set -u
+cd "$(dirname "$0")" || exit 1
+
+VOL_NAME="${1:-develop}"
+MOUNT="/Volumes/$VOL_NAME"
+
+fail() {
+  print -u2 -- ""
+  print -u2 -- "error: $*"
+  print -u2 -- "Nothing was erased. Do not initialize, format or erase the disk."
+  exit 1
+}
+
+# 1. SanDisk hardware lock
+if ! state=$(./sandisk-unlock state 2>/dev/null); then
+  fail "SanDisk drive not found. Connect it and try again."
+fi
+
+case "$state" in
+  0x01)
+    print -- "The SanDisk hardware lock is closed."
+    print -- "Enter the SanDisk password (not the APFS password)."
+    ./sandisk-unlock unlock || fail "SanDisk hardware unlock failed."
+    ;;
+  0x00|0x02)
+    # No hardware unlock needed.
+    ;;
+  *)
+    fail "Unexpected SanDisk state $state. Do not retry; check the drive on another system."
+    ;;
+esac
+
+# 2. Already mounted under the expected name?
+if [[ -d "$MOUNT" ]]; then
+  open "$MOUNT" || fail "Finder could not open $MOUNT."
+  print -- "Opened $MOUNT"
+  exit 0
+fi
+
+# 3. Find the APFS volume by name.
+dev=$(diskutil apfs list 2>/dev/null | awk -v name="$VOL_NAME" '
+  /^[[:space:]]*\+-> Volume / { dev=$3; next }
+  $0 ~ "Name:[[:space:]]+" name { if (dev != "") { print dev; exit } }
+')
+
+if [[ -z "$dev" ]]; then
+  fail "APFS volume '$VOL_NAME' not found. Is the data drive connected and hardware-unlocked?"
+fi
+
+print -- "Found '$VOL_NAME' at $dev."
+
+# 4. Is the APFS volume locked?
+fv=$(diskutil apfs list 2>/dev/null | awk -v d="$dev" '
+  $0 ~ "Volume " d { inblock=1; next }
+  inblock && /FileVault:/ { print; exit }
+')
+
+if [[ "$fv" == *Locked* ]]; then
+  hint=$(diskutil apfs listCryptoUsers "$dev" 2>/dev/null | awk '
+    /Hint:/ { sub(/^.*Hint:[[:space:]]*/, ""); print; exit }
+  ')
+  [[ -n "$hint" ]] && print -- "APFS password hint: $hint"
+  print -- "The APFS/FileVault volume is locked. Enter its passphrase."
+  diskutil apfs unlockVolume "$dev" || fail "APFS unlock failed."
+fi
+
+# 5. Mount if the unlock did not already mount it.
+if [[ ! -d "$MOUNT" ]]; then
+  diskutil mount "$dev" >/dev/null 2>&1 || true
+fi
+
+# 6. Resolve the real mount point (it can be "develop 1") and open it.
+mp=$(diskutil info "$dev" 2>/dev/null | awk -F': *' '/Mount Point:/ { print $2; exit }')
+
+if [[ -n "$mp" && -d "$mp" ]]; then
+  open "$mp" || fail "Finder could not open $mp."
+  print -- "Opened $mp"
+  exit 0
+fi
+
+fail "Volume is unlocked but not mounted. Open Disk Utility and mount '$VOL_NAME'."

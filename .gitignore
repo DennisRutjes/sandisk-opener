@@ -1,0 +1,9 @@
+.DS_Store
+.tools/
+vendor/
+analysis/
+SanDisk Opener.app/
+*.zip
+sandisk-unlock
+app/icon-1024.png
+app/AppIcon.iconset/
